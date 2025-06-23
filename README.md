@@ -43,9 +43,19 @@ viofo-dashcam-downloader/
 1. **Clone the repo if you want to build your own Docker image:**
 
    ```sh
-   git clone https://github.com/yourusername/viofo-dashcam-downloader.git
+   git clone https://github.com/you1952008/viofo-dashcam-downloader.git
    cd viofo-dashcam-downloader
    ```
+
+2. ***Use Prebuilt Image***
+
+    ```sh
+    git clone --filter=blob:none --no-checkout https://github.com/you1952008/viofo-dashcam-downloader.git
+    cd viofo-dashcam-downloader
+    git sparse-checkout init --cone
+    git sparse-checkout set .env.template compose.yml README.md
+    git checkout
+    ```
 
 2. **Copy the .env:**
 
@@ -65,3 +75,6 @@ viofo-dashcam-downloader/
    ```sh
    docker compose up
    ```
+
+> **Tip:**  
+> If you only want to use the prebuilt image and don't need the Docker build scripts, you can just download `.env.template` and `compose.yml` from the repo, or clone the repo and remove the `docker/` folder.
