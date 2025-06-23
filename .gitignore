@@ -1,0 +1,19 @@
+# Ignore environment and secrets
+.env
+*.env
+# Ignore logs and runtime files
+logs/
+*.log
+downloads/
+dashcam/
+mnt/
+__pycache__/
+*.pyc
+*.swp
+# Docker artifacts
+*.pid
+*.sock
+# VSCode and OS files
+.vscode/
+.DS_Store
+Thumbs.db
