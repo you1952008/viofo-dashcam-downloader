@@ -1,11 +1,11 @@
 group "default" {
-  targets = ["viofo-dashcam-downloader"]
+  targets = ["viofo-pipeline"]
 }
 
-target "viofo-dashcam-downloader" {
+target "viofo-pipeline" {
   context    = "./docker-build"
   dockerfile = "Dockerfile"
-  tags       = ["ryanwayne/viofo-dashcam-downloader:1.0.3"]
+  tags       = ["ryanwayne/viofo-pipeline:1.0.3"]
   platforms  = [
     "linux/amd64",   # For Windows via Docker Desktop/WSL2
     "linux/arm/v6",  # For Pi Zero 1.1
