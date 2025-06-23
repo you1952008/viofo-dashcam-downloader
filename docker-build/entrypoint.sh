@@ -4,6 +4,13 @@ set -e
 # Load configuration and environment variables
 source /app/wifi_scripts/config.sh
 
+# Hardcoded paths
+TEMP_DIR="/app/downloads"
+DEST_DIR="/app/dashcam/videos"
+LOG_FILE="/app/logs/viofo_copy.log"
+INDEX_FILE="/app/downloads/processed_files.txt"
+INDEX_LOCK="/app/downloads/processed_files.txt.lock"
+
 # Logging function for consistent log output
 _log() {
   local level="${1:-INFO}"
@@ -19,16 +26,51 @@ mkdir -p "$(dirname "$LOG_FILE")"
 touch "$INDEX_FILE" "$INDEX_LOCK"
 bash /app/init_index.sh
 
-# Initial connection to CAR_SSID and attempt to mount SMB share
-_log INFO "Connecting to CAR_SSID ($CAR_SSID)..."
-bash /app/wifi_scripts/switch_wifi.sh "$CAR_SSID" "$CAR_PSK"
+# Ensure WPA config file exists
+if [ ! -f "$WPA_CONF" ]; then
+  mkdir -p "$(dirname "$WPA_CONF")"
+  touch "$WPA_CONF"
+fi
 
-_log INFO "Checking SMB mount at $DEST_DIR..."
-if ! mountpoint -q "$DEST_DIR"; then
-  _log INFO "Attempting to mount $DEST_DIR..."
-  mount "$DEST_DIR" && _log INFO "SMB share mounted." || _log ERROR "Failed to mount $DEST_DIR."
+# Function to ensure SMB mount point exists and is mounted
+ensure_smb_mount() {
+  mkdir -p /app/dashcam
+  mkdir -p /app/dashcam/videos
+  if ! mountpoint -q "$DEST_DIR"; then
+    _log INFO "Attempting to mount $DEST_DIR..."
+    if mount -t cifs "//$SMB_SERVER/$SMB_SHARE" "$DEST_DIR" \
+      -o username="$SMB_USER",password="$SMB_PASS",vers=3.0,uid=1000,gid=1000; then
+      _log INFO "SMB share mounted."
+      return 0
+    else
+      _log ERROR "Failed to mount $DEST_DIR."
+      return 1
+    fi
+  else
+    _log INFO "SMB share already mounted."
+    return 0
+  fi
+}
+
+# Helper function to check if a given SSID is available in the Wi-Fi scan
+ssid_available() {
+  local ssid="$1"
+  iwlist "$IFACE" scan 2>/dev/null | grep -q "ESSID:\"$ssid\""
+}
+
+# Initial connection to CAR_SSID or BASE_SSID and attempt to mount SMB share
+if ssid_available "$CAR_SSID"; then
+  _log INFO "Connecting to CAR_SSID ($CAR_SSID)..."
+  bash /app/wifi_scripts/switch_wifi.sh "$CAR_SSID" "$CAR_PSK"
+  _log INFO "Checking SMB mount at $DEST_DIR..."
+  ensure_smb_mount
+elif ssid_available "$BASE_SSID"; then
+  _log INFO "Connecting to BASE_SSID ($BASE_SSID)..."
+  bash /app/wifi_scripts/switch_wifi.sh "$BASE_SSID" "$BASE_PSK"
+  _log INFO "Checking SMB mount at $DEST_DIR..."
+  ensure_smb_mount
 else
-  _log INFO "SMB share already mounted."
+  _log INFO "No CAR or BASE SSID found at startup. Skipping initial SMB mount."
 fi
 
 # Bootstrap the index file from existing files on the SMB share
@@ -36,11 +78,7 @@ _log INFO "Bootstrapping index from existing files..."
 bash /app/bootstrap_index.sh
 _log INFO "Bootstrap complete."
 
-# Helper function to check if a given SSID is available in the Wi-Fi scan
-ssid_available() {
-  local ssid="$1"
-  iwlist "$IFACE" scan 2>/dev/null | grep -q "ESSID:\"$ssid\""
-}
+IDLE_SLEEP="${IDLE_SLEEP:-300}"  # Default to 5 minutes, override with env if needed
 
 # Main loop: handles Wi-Fi switching, downloading, and copying files
 while true; do
@@ -52,7 +90,7 @@ while true; do
     _log ERROR "Low disk space (<${THRESHOLD}%). Attempting to offload files..."
 
     wifi_connected=""
-    # Try to connect to CAR or BASE Wi-Fi for offloading
+    # Only scan for CAR or BASE if needed
     if ssid_available "$CAR_SSID"; then
       _log INFO "CAR_SSID ($CAR_SSID) detected. Switching Wi-Fi..."
       bash /app/wifi_scripts/switch_wifi.sh "$CAR_SSID" "$CAR_PSK"
@@ -62,34 +100,18 @@ while true; do
       bash /app/wifi_scripts/switch_wifi.sh "$BASE_SSID" "$BASE_PSK"
       wifi_connected="BASE"
     else
-      _log ERROR "No CAR or BASE SSID found. Waiting..."
-      sleep 60
+      _log INFO "No CAR or BASE SSID found. Sleeping for $IDLE_SLEEP seconds..."
+      sleep "$IDLE_SLEEP"
       continue
     fi
 
-    # Check if the SMB share is mounted; attempt to mount if not
-    _log INFO "Checking SMB mount at $DEST_DIR..."
-    smb_mounted=false
-    if ! mountpoint -q "$DEST_DIR"; then
-      _log INFO "Attempting to mount $DEST_DIR..."
-      if mount "$DEST_DIR"; then
-        _log INFO "SMB share mounted."
-        smb_mounted=true
-      else
-        _log ERROR "Failed to mount $DEST_DIR."
-      fi
-    else
-      _log INFO "SMB share already mounted."
-      smb_mounted=true
-    fi
-
-    # Only run async_copier if connected to CAR or BASE and SMB is mounted
-    if { [[ "$wifi_connected" == "CAR" ]] || [[ "$wifi_connected" == "BASE" ]]; } && $smb_mounted; then
+    # Ensure SMB share is mounted
+    if ensure_smb_mount && { [[ "$wifi_connected" == "CAR" ]] || [[ "$wifi_connected" == "BASE" ]]; }; then
       _log INFO "Launching async_copier..."
       bash /app/async_copier.sh
     fi
 
-    sleep 60
+    sleep "$IDLE_SLEEP"
     continue
   fi
 
@@ -100,8 +122,6 @@ while true; do
     bash /app/wifi_scripts/auto_wifi.sh "$CAMERA_SSID" "$CAMERA_PSK"
     _log INFO "Launching video downloader..."
     bash /app/video_downloader.sh
-    _log INFO "Reconnecting to CAR_SSID ($CAR_SSID)..."
-    bash /app/wifi_scripts/switch_wifi.sh "$CAR_SSID" "$CAR_PSK"
     wifi_connected="CAMERA"
   elif ssid_available "$CAR_SSID"; then
     _log INFO "CAR_SSID ($CAR_SSID) detected. Switching Wi-Fi..."
@@ -112,31 +132,16 @@ while true; do
     bash /app/wifi_scripts/switch_wifi.sh "$BASE_SSID" "$BASE_PSK"
     wifi_connected="BASE"
   else
-    _log INFO "No known SSID found. Waiting..."
-    sleep 60
+    _log INFO "No known SSID found. Sleeping for $IDLE_SLEEP seconds..."
+    sleep "$IDLE_SLEEP"
     continue
   fi
 
-  # Check if the SMB share is mounted; attempt to mount if not
-  _log INFO "Checking SMB mount at $DEST_DIR..."
-  smb_mounted=false
-  if ! mountpoint -q "$DEST_DIR"; then
-    _log INFO "Attempting to mount $DEST_DIR..."
-    if mount "$DEST_DIR"; then
-      _log INFO "SMB share mounted."
-      smb_mounted=true
-    else
-      _log ERROR "Failed to mount $DEST_DIR."
-    fi
-  else
-    _log INFO "SMB share already mounted."
-    smb_mounted=true
-  fi
-
-  # Only run async_copier if connected to CAR or BASE and SMB is mounted
-  if { [[ "$wifi_connected" == "CAR" ]] || [[ "$wifi_connected" == "BASE" ]]; } && $smb_mounted; then
+  # Only run async_copier if on CAR or BASE and SMB is mounted
+  if ensure_smb_mount && { [[ "$wifi_connected" == "CAR" ]] || [[ "$wifi_connected" == "BASE" ]]; }; then
     _log INFO "Launching async_copier..."
     bash /app/async_copier.sh
   fi
 
+  sleep "$IDLE_SLEEP"
 done

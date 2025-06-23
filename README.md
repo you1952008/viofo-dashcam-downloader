@@ -78,3 +78,7 @@ viofo-dashcam-downloader/
 
 > **Tip:**  
 > If you only want to use the prebuilt image and don't need the Docker build scripts, you can just download `.env.template` and `compose.yml` from the repo, or clone the repo and remove the `docker/` folder.
+
+## License
+
+This project is licensed under the MIT License.  

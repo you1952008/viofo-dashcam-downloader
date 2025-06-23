@@ -9,7 +9,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 # Install dependencies
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
-    bash curl exiftool coreutils util-linux grep sed gawk procps parallel \
+    bash curl cifs-utils exiftool coreutils util-linux grep sed gawk procps parallel \
     wpasupplicant iw wireless-tools iproute2 isc-dhcp-client bzip2 \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
