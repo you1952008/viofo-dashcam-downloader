@@ -11,6 +11,7 @@ Automated pipeline for downloading, tagging, and archiving dashcam videos from a
 - Maintains an index of processed files
 - Runs in Docker, supports multi-arch (x86_64, arm64, armv6)
 
+```text
 viofo-dashcam-downloader/
 │
 ├── docker/                  # All Docker-related files/scripts
@@ -35,6 +36,7 @@ viofo-dashcam-downloader/
 ├── compose.yml              # Docker Compose for local use
 ├── README.md
 └── version_1.5/             # (Optional: legacy or alternate version)
+```
 
 ## Quick Start
 
