@@ -18,5 +18,5 @@ __pycache__/
 .DS_Store
 Thumbs.db
 # bump2version backup and metadata files
-.bumpversion.cfg~
+.bumpversion.cfg
 .bumpversion.tmp
