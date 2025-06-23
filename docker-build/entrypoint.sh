@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -e
+shopt -s nullglob extglob
 
 # Load configuration and environment variables
 source /app/wifi_scripts/config.sh
@@ -56,6 +57,16 @@ ensure_smb_mount() {
 ssid_available() {
   local ssid="$1"
   iwlist "$IFACE" scan 2>/dev/null | grep -q "ESSID:\"$ssid\""
+}
+
+current_ssid() {
+  iwgetid -r 2>/dev/null
+}
+
+has_files_to_copy() {
+  shopt -s nullglob
+  local files=("$TEMP_DIR"/!(*.txt|*.lock|*.filepart))
+  (( ${#files[@]} > 0 ))
 }
 
 # Initial connection to CAR_SSID or BASE_SSID and attempt to mount SMB share
@@ -118,30 +129,57 @@ while true; do
   wifi_connected=""
   # Scan and connect in priority order: CAMERA, CAR, BASE
   if ssid_available "$CAMERA_SSID"; then
-    _log INFO "CAMERA_SSID ($CAMERA_SSID) detected. Switching Wi-Fi..."
-    bash /app/wifi_scripts/auto_wifi.sh "$CAMERA_SSID" "$CAMERA_PSK"
+    if [[ "$(current_ssid)" != "$CAMERA_SSID" ]]; then
+      _log INFO "CAMERA_SSID ($CAMERA_SSID) detected. Switching Wi-Fi..."
+      bash /app/wifi_scripts/auto_wifi.sh "$CAMERA_SSID" "$CAMERA_PSK"
+    else
+      _log INFO "Already connected to CAMERA_SSID ($CAMERA_SSID)."
+    fi
     _log INFO "Launching video downloader..."
     bash /app/video_downloader.sh
     wifi_connected="CAMERA"
   elif ssid_available "$CAR_SSID"; then
-    _log INFO "CAR_SSID ($CAR_SSID) detected. Switching Wi-Fi..."
-    bash /app/wifi_scripts/switch_wifi.sh "$CAR_SSID" "$CAR_PSK"
+    if [[ "$(current_ssid)" != "$CAR_SSID" ]]; then
+      _log INFO "CAR_SSID ($CAR_SSID) detected. Switching Wi-Fi..."
+      bash /app/wifi_scripts/switch_wifi.sh "$CAR_SSID" "$CAR_PSK"
+    else
+      _log INFO "Already connected to CAR_SSID ($CAR_SSID)."
+    fi
     wifi_connected="CAR"
   elif ssid_available "$BASE_SSID"; then
-    _log INFO "BASE_SSID ($BASE_SSID) detected. Switching Wi-Fi..."
-    bash /app/wifi_scripts/switch_wifi.sh "$BASE_SSID" "$BASE_PSK"
+    if [[ "$(current_ssid)" != "$BASE_SSID" ]]; then
+      _log INFO "BASE_SSID ($BASE_SSID) detected. Switching Wi-Fi..."
+      bash /app/wifi_scripts/switch_wifi.sh "$BASE_SSID" "$BASE_PSK"
+    else
+      _log INFO "Already connected to BASE_SSID ($BASE_SSID)."
+    fi
     wifi_connected="BASE"
   else
-    _log INFO "No known SSID found. Sleeping for $IDLE_SLEEP seconds..."
-    sleep "$IDLE_SLEEP"
-    continue
+    # Fallback: check if already connected to CAR or BASE
+    current=$(current_ssid)
+    if [[ "$current" == "$CAR_SSID" ]]; then
+      _log INFO "Already connected to CAR_SSID ($CAR_SSID)."
+      wifi_connected="CAR"
+    elif [[ "$current" == "$BASE_SSID" ]]; then
+      _log INFO "Already connected to BASE_SSID ($BASE_SSID)."
+      wifi_connected="BASE"
+    else
+      _log INFO "No known SSID found. Sleeping for $IDLE_SLEEP seconds..."
+      sleep "$IDLE_SLEEP"
+      continue
+    fi
   fi
 
   # Only run async_copier if on CAR or BASE and SMB is mounted
   if ensure_smb_mount && { [[ "$wifi_connected" == "CAR" ]] || [[ "$wifi_connected" == "BASE" ]]; }; then
-    _log INFO "Launching async_copier..."
-    bash /app/async_copier.sh
+    if has_files_to_copy; then
+      _log INFO "Files found in $TEMP_DIR. Launching async_copier..."
+      bash /app/async_copier.sh
+    else
+      _log INFO "No files to process in $TEMP_DIR. Waiting for new files or Wi-Fi change."
+    fi
   fi
 
+  _log INFO "Sleeping for $IDLE_SLEEP seconds before next check."
   sleep "$IDLE_SLEEP"
 done

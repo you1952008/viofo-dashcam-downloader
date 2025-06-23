@@ -16,15 +16,18 @@ _log() {
 }
 
 main() {
+  _log INFO "=== async_copier started ==="
   mkdir -p "$TEMP_DIR" "$DEST_DIR" "$(dirname "$LOG_FILE")"
   touch "$INDEX_FILE"
 
+  _log INFO "Checking if SMB share ($DEST_DIR) is mounted..."
   if ! mountpoint -q "$DEST_DIR"; then
     _log ERROR "SMB share ($DEST_DIR) is not mounted. Exiting."
     exit 1
   fi
 
   local found_files=false
+  _log INFO "Scanning $TEMP_DIR for files to copy..."
 
   for src in "$TEMP_DIR"/!(*.txt|*.lock|*.filepart); do
     [[ -f "$src" ]] || continue
@@ -39,6 +42,7 @@ main() {
     checksum=$(sha256sum "$src" | cut -d' ' -f1)
     _log INFO "SHA256 for $fname: $checksum"
 
+    _log INFO "Tagging $fname with metadata..."
     if "$TAG_SCRIPT" "$src" "$checksum"; then
       _log INFO "Metadata added to $fname"
     else
@@ -46,6 +50,7 @@ main() {
       continue
     fi
 
+    _log INFO "Copying $fname to $DEST_DIR..."
     if cp -a "$src" "$dst"; then
       _log INFO "Copied $fname to $DEST_DIR"
       (
@@ -60,6 +65,7 @@ main() {
     fi
   done
 
+  _log INFO "Copying $INDEX_FILE to $DEST_DIR..."
   if cp -a "$INDEX_FILE" "$DEST_DIR/"; then
     _log INFO "Copied $INDEX_FILE to $DEST_DIR"
   else
@@ -69,6 +75,8 @@ main() {
   if ! $found_files; then
     _log INFO "No valid files found in $TEMP_DIR"
   fi
+
+  _log INFO "=== async_copier finished ==="
 }
 
 main "$@"
