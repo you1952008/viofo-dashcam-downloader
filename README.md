@@ -11,6 +11,31 @@ Automated pipeline for downloading, tagging, and archiving dashcam videos from a
 - Maintains an index of processed files
 - Runs in Docker, supports multi-arch (x86_64, arm64, armv6)
 
+viofo-dashcam-downloader/
+│
+├── docker/                  # All Docker-related files/scripts
+│   ├── Dockerfile
+│   ├── entrypoint.sh
+│   ├── video_downloader.sh
+│   ├── async_copier.sh
+│   ├── tags_viofo.sh
+│   ├── bootstrap_index.sh
+│   ├── init_index.sh
+│   └── wifi_scripts/
+│       ├── auto_wifi.sh
+│       ├── check_space.sh
+│       ├── config.sh
+│       └── switch_wifi.sh
+│
+├── downloads/               # Local download cache (gitignored)
+├── logs/                    # Log files (gitignored)
+├── .env                     # User's environment config
+├── .env.template            # Template for .env
+├── .gitignore
+├── compose.yml              # Docker Compose for local use
+├── README.md
+└── version_1.5/             # (Optional: legacy or alternate version)
+
 ## Quick Start
 
 1. **Clone the repo if you want to build your own Docker image:**

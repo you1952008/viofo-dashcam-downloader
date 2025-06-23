@@ -47,8 +47,48 @@ while true; do
   # Check if there is enough free disk space before proceeding
   used_pct=$(df --output=pcent "$DEST_DIR" | tail -1 | tr -dc '0-9')
   free_pct=$((100 - used_pct))
+
   if (( free_pct < THRESHOLD )); then
-    _log ERROR "Low disk space (<${THRESHOLD}%). Waiting..."
+    _log ERROR "Low disk space (<${THRESHOLD}%). Attempting to offload files..."
+
+    wifi_connected=""
+    # Try to connect to CAR or BASE Wi-Fi for offloading
+    if ssid_available "$CAR_SSID"; then
+      _log INFO "CAR_SSID ($CAR_SSID) detected. Switching Wi-Fi..."
+      bash /app/wifi_scripts/switch_wifi.sh "$CAR_SSID" "$CAR_PSK"
+      wifi_connected="CAR"
+    elif ssid_available "$BASE_SSID"; then
+      _log INFO "BASE_SSID ($BASE_SSID) detected. Switching Wi-Fi..."
+      bash /app/wifi_scripts/switch_wifi.sh "$BASE_SSID" "$BASE_PSK"
+      wifi_connected="BASE"
+    else
+      _log ERROR "No CAR or BASE SSID found. Waiting..."
+      sleep 60
+      continue
+    fi
+
+    # Check if the SMB share is mounted; attempt to mount if not
+    _log INFO "Checking SMB mount at $DEST_DIR..."
+    smb_mounted=false
+    if ! mountpoint -q "$DEST_DIR"; then
+      _log INFO "Attempting to mount $DEST_DIR..."
+      if mount "$DEST_DIR"; then
+        _log INFO "SMB share mounted."
+        smb_mounted=true
+      else
+        _log ERROR "Failed to mount $DEST_DIR."
+      fi
+    else
+      _log INFO "SMB share already mounted."
+      smb_mounted=true
+    fi
+
+    # Only run async_copier if connected to CAR or BASE and SMB is mounted
+    if { [[ "$wifi_connected" == "CAR" ]] || [[ "$wifi_connected" == "BASE" ]]; } && $smb_mounted; then
+      _log INFO "Launching async_copier..."
+      bash /app/async_copier.sh
+    fi
+
     sleep 60
     continue
   fi
