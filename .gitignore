@@ -17,6 +17,6 @@ __pycache__/
 .vscode/
 .DS_Store
 Thumbs.db
-# bump2version backup and metadata files
-.bumpversion.cfg
-.bumpversion.tmp
+# # bump2version backup and metadata files
+# .bumpversion.cfg
+# .bumpversion.tmp
