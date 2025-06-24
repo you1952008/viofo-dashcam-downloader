@@ -128,8 +128,8 @@ while true; do
       if [[ $vd_exit -eq 0 ]]; then
         _log INFO "No files left to download from camera. Switching to CAR_SSID ($CAR_SSID) or BASE_SSID ($BASE_SSID)..."
         /app/wifi_scripts/auto_wifi.sh car || /app/wifi_scripts/auto_wifi.sh base
-        _log INFO "Staying on CAR or BASE for 3 minutes for maintenance/monitoring."
-        sleep 180  # 3 minutes
+        _log INFO "Staying on CAR or BASE for $IDLE_SLEEP seconds for maintenance/monitoring."
+        sleep "$IDLE_SLEEP"
         continue
       fi
     else
