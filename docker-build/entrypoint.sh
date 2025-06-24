@@ -1,4 +1,4 @@
-VERSION="1.1.3"
+VERSION="1.1.4"
 #!/usr/bin/env bash
 set -e
 shopt -s nullglob extglob
