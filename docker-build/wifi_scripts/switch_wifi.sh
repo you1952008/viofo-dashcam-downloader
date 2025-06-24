@@ -16,8 +16,8 @@ fi
 
 # Check if SSID is visible
 if ! nmcli -t -f ssid dev wifi list ifname "$IFACE" | grep -Fxq "$SSID"; then
-  echo "[ERROR] SSID '$SSID' not found in scan results. Skipping switch."
-  exit 0  # or exit 2 if you want to treat as a soft error
+  echo "[WARN] SSID '$SSID' not found in scan results. Skipping switch."
+  exit 2  # Soft error: SSID not found
 fi
 
 # Try to connect
