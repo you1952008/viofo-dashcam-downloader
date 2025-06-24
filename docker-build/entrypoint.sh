@@ -123,7 +123,15 @@ while true; do
     if [[ "$(current_ssid)" == "$CAMERA_SSID" ]]; then
       _log INFO "Launching video downloader..."
       bash /app/video_downloader.sh
+      vd_exit=$?
       wifi_connected="CAMERA"
+      if [[ $vd_exit -eq 0 ]]; then
+        _log INFO "No files left to download from camera. Switching to CAR_SSID ($CAR_SSID) or BASE_SSID ($BASE_SSID)..."
+        /app/wifi_scripts/auto_wifi.sh car || /app/wifi_scripts/auto_wifi.sh base
+        _log INFO "Staying on CAR or BASE for 3 minutes for maintenance/monitoring."
+        sleep 180  # 3 minutes
+        continue
+      fi
     else
       _log ERROR "Failed to connect to CAMERA_SSID ($CAMERA_SSID). Skipping video downloader."
     fi
