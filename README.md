@@ -79,6 +79,40 @@ viofo-dashcam-downloader/
 > **Tip:**  
 > If you only want to use the prebuilt image and don't need the Docker build scripts, you can just download `.env.template` and `compose.yml` from the repo, or clone the repo and remove the `docker/` folder.
 
+## Running with Container-Managed Wi-Fi
+
+To allow the container to control Wi-Fi, you must disable any `wpa_supplicant` or network manager on the host that manages your Wi-Fi interface.
+
+### 1. Disable wpa_supplicant on the Host
+
+```sh
+sudo systemctl stop wpa_supplicant
+sudo systemctl disable wpa_supplicant
+sudo pkill wpa_supplicant
+```
+
+If you use NetworkManager, mark your Wi-Fi interface as unmanaged by adding to `/etc/NetworkManager/NetworkManager.conf`:
+
+```text
+[keyfile]
+unmanaged-devices=interface-name:wlan0
+```
+
+Then reload NetworkManager:
+
+```sh
+sudo systemctl reload NetworkManager
+```
+
+### 2. Run the Container
+
+Make sure your container is started with:
+
+- `--net=host`
+- `--privileged`
+
+The container will now manage Wi-Fi connections using its own `wpa_supplicant` and scripts.
+
 ## License
 
-This project is licensed under the MIT License.  
+This project is licensed under the MIT License.

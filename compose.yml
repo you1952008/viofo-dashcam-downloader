@@ -13,6 +13,7 @@ services:
       - /var/lib/dbus:/var/lib/dbus  # optional, for D-Bus control
       - /var/run/wpa_supplicant:/var/run/wpa_supplicant
       # - /mnt/dashcam/videos:/mnt/dashcam
+      - /var/run/dbus:/var/run/dbus
     environment:
-      - DBUS_SYSTEM_BUS_ADDRESS=unix:path=/host/run/dbus/system_bus_socket
+      - DBUS_SYSTEM_BUS_ADDRESS=unix:path=/var/run/dbus/system_bus_socket
     restart: unless-stopped

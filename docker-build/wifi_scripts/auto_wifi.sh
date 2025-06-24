@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+
 SCRIPT_DIR="$(dirname "$0")"
 source "$SCRIPT_DIR/config.sh"
 
@@ -38,3 +39,4 @@ if [[ "$current_ssid" == "$ssid" ]]; then
 fi
 
 "$SCRIPT_DIR/switch_wifi.sh" "$ssid" "$psk"
+sleep 2  # Give Wi-Fi a moment to associate

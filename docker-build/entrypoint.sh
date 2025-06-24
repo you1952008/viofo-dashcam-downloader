@@ -73,12 +73,12 @@ has_files_to_copy() {
 # Initial connection to CAR_SSID or BASE_SSID and attempt to mount SMB share
 if ssid_available "$CAR_SSID"; then
   _log INFO "Connecting to CAR_SSID ($CAR_SSID)..."
-  bash /app/wifi_scripts/switch_wifi.sh "$CAR_SSID" "$CAR_PSK"
+  /app/wifi_scripts/auto_wifi.sh car
   _log INFO "Checking SMB mount at $DEST_DIR..."
   ensure_smb_mount
 elif ssid_available "$BASE_SSID"; then
   _log INFO "Connecting to BASE_SSID ($BASE_SSID)..."
-  bash /app/wifi_scripts/switch_wifi.sh "$BASE_SSID" "$BASE_PSK"
+  /app/wifi_scripts/auto_wifi.sh base
   _log INFO "Checking SMB mount at $DEST_DIR..."
   ensure_smb_mount
 else
@@ -92,57 +92,46 @@ _log INFO "Bootstrap complete."
 
 IDLE_SLEEP="${IDLE_SLEEP:-300}"  # Default to 5 minutes, override with env if needed
 
+# Switch to car Wi-Fi before starting main logic
+echo "[INFO] Connecting to CAR_SSID ($CAR_SSID)..."
+if /app/wifi_scripts/auto_wifi.sh car; then
+  echo "[INFO] Wi-Fi switch command executed."
+else
+  echo "[ERROR] Wi-Fi switch failed!"
+  exit 1
+fi
+
+# Wait for Wi-Fi association and log status
+sleep 2
+iwgetid -r || echo "[WARN] Not associated with any SSID"
+iw "$IFACE" link || echo "[WARN] No link info for $IFACE"
+
 # Main loop: handles Wi-Fi switching, downloading, and copying files
 while true; do
-  # Check if there is enough free disk space before proceeding
-  used_pct=$(df --output=pcent "$DEST_DIR" | tail -1 | tr -dc '0-9')
-  free_pct=$((100 - used_pct))
-
-  if (( free_pct < THRESHOLD )); then
-    _log ERROR "Low disk space (<${THRESHOLD}%). Attempting to offload files..."
-
-    wifi_connected=""
-    # Only scan for CAR or BASE if needed
-    if ssid_available "$CAR_SSID"; then
-      _log INFO "CAR_SSID ($CAR_SSID) detected. Switching Wi-Fi..."
-      bash /app/wifi_scripts/switch_wifi.sh "$CAR_SSID" "$CAR_PSK"
-      wifi_connected="CAR"
-    elif ssid_available "$BASE_SSID"; then
-      _log INFO "BASE_SSID ($BASE_SSID) detected. Switching Wi-Fi..."
-      bash /app/wifi_scripts/switch_wifi.sh "$BASE_SSID" "$BASE_PSK"
-      wifi_connected="BASE"
-    else
-      _log INFO "No CAR or BASE SSID found. Sleeping for $IDLE_SLEEP seconds..."
-      sleep "$IDLE_SLEEP"
-      continue
-    fi
-
-    # Ensure SMB share is mounted
-    if ensure_smb_mount && { [[ "$wifi_connected" == "CAR" ]] || [[ "$wifi_connected" == "BASE" ]]; }; then
-      _log INFO "Launching async_copier..."
-      bash /app/async_copier.sh
-    fi
-
-    sleep "$IDLE_SLEEP"
-    continue
-  fi
-
   wifi_connected=""
+
   # Scan and connect in priority order: CAMERA, CAR, BASE
   if ssid_available "$CAMERA_SSID"; then
     if [[ "$(current_ssid)" != "$CAMERA_SSID" ]]; then
       _log INFO "CAMERA_SSID ($CAMERA_SSID) detected. Switching Wi-Fi..."
-      bash /app/wifi_scripts/auto_wifi.sh "$CAMERA_SSID" "$CAMERA_PSK"
+      /app/wifi_scripts/auto_wifi.sh camera
+      sleep 2
     else
       _log INFO "Already connected to CAMERA_SSID ($CAMERA_SSID)."
     fi
-    _log INFO "Launching video downloader..."
-    bash /app/video_downloader.sh
-    wifi_connected="CAMERA"
+    # Only run video_downloader if actually connected to CAMERA_SSID
+    if [[ "$(current_ssid)" == "$CAMERA_SSID" ]]; then
+      _log INFO "Launching video downloader..."
+      bash /app/video_downloader.sh
+      wifi_connected="CAMERA"
+    else
+      _log ERROR "Failed to connect to CAMERA_SSID ($CAMERA_SSID). Skipping video downloader."
+    fi
   elif ssid_available "$CAR_SSID"; then
     if [[ "$(current_ssid)" != "$CAR_SSID" ]]; then
       _log INFO "CAR_SSID ($CAR_SSID) detected. Switching Wi-Fi..."
-      bash /app/wifi_scripts/switch_wifi.sh "$CAR_SSID" "$CAR_PSK"
+      /app/wifi_scripts/auto_wifi.sh car
+      sleep 2
     else
       _log INFO "Already connected to CAR_SSID ($CAR_SSID)."
     fi
@@ -150,13 +139,13 @@ while true; do
   elif ssid_available "$BASE_SSID"; then
     if [[ "$(current_ssid)" != "$BASE_SSID" ]]; then
       _log INFO "BASE_SSID ($BASE_SSID) detected. Switching Wi-Fi..."
-      bash /app/wifi_scripts/switch_wifi.sh "$BASE_SSID" "$BASE_PSK"
+      /app/wifi_scripts/auto_wifi.sh base
+      sleep 2
     else
       _log INFO "Already connected to BASE_SSID ($BASE_SSID)."
     fi
     wifi_connected="BASE"
   else
-    # Fallback: check if already connected to CAR or BASE
     current=$(current_ssid)
     if [[ "$current" == "$CAR_SSID" ]]; then
       _log INFO "Already connected to CAR_SSID ($CAR_SSID)."
