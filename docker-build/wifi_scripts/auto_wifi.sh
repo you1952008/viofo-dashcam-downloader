@@ -38,5 +38,16 @@ if [[ "$current_ssid" == "$ssid" ]]; then
   exit 0
 fi
 
-"$SCRIPT_DIR/switch_wifi.sh" "$ssid" "$psk"
+ssid_available() {
+    local ssid="$1"
+    nmcli -t -f ssid dev wifi list ifname "${IFACE:-wlan0}" | grep -Fxq "$ssid"
+}
+
+if ssid_available "$ssid"; then
+    /app/wifi_scripts/switch_wifi.sh "$ssid" "$psk"
+    # handle exit code if needed
+else
+    echo "[INFO] SSID '$ssid' not found in scan results. Skipping Wi-Fi switch."
+fi
+
 sleep 2  # Give Wi-Fi a moment to associate

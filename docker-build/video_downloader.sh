@@ -34,14 +34,22 @@ TMP_LIST=$(mktemp)
 trap 'rm -f "$TMP_LIST"' EXIT
 
 echo "$(date) │ Curling file list from $BASE_URL"
-curl --fail --connect-timeout 5 --max-time 15 -s "${BASE_URL%/}/" \
-  | grep -oiE 'href="[^"]+\.(MP4|MOV|TS)"' \
-  | sed -E 's/^href="(.+)"/\1/' \
-  | sed 's|^.*/||' \
-  | sort -ru \
-  > "$TMP_LIST"
+{
+  curl --fail --connect-timeout 5 --max-time 15 -s "${BASE_URL%/}/" \
+    | grep -oiE 'href="[^"]+\.(MP4|MOV|TS)"' \
+    | sed -E 's/^href="(.+)"/\1/' \
+    | sed 's|^.*/||' \
+    | sort -ru \
+    > "$TMP_LIST"
+} || true
 
 echo "$(date) │ Found $(wc -l <"$TMP_LIST") files."
+
+# Clean exit if no files to download
+if [[ ! -s "$TMP_LIST" ]]; then
+  echo "$(date) │ ✔️ No files to download. Exiting cleanly."
+  exit 0
+fi
 
 consecutive_skipped=0
 max_consecutive_skipped=10

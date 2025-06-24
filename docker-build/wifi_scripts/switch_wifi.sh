@@ -5,6 +5,17 @@ IFACE="${IFACE:-wlan0}"
 SSID="$1"
 PSK="$2"
 
+# Pre-flight: Check that NetworkManager is running and managing the interface
+if ! nmcli -t -f RUNNING general | grep -q '^running$'; then
+  echo "[ERROR] NetworkManager is not running or not accessible via D-Bus."
+  exit 10
+fi
+
+if ! nmcli device status | grep -E "^$IFACE\s" | grep -q -E 'wifi.*(connected|disconnected)'; then
+  echo "[ERROR] NetworkManager is not managing interface $IFACE. Check your NetworkManager configuration."
+  exit 11
+fi
+
 echo "[DEBUG] nmcli switch_wifi.sh called with IFACE=$IFACE SSID=$SSID"
 
 # Check if already connected

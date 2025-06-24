@@ -113,6 +113,72 @@ Make sure your container is started with:
 
 The container will now manage Wi-Fi connections using its own `wpa_supplicant` and scripts.
 
+## Host Setup Requirements
+
+To use this project with robust Wi-Fi switching from inside the container, your host system must meet the following requirements:
+
+### 1. NetworkManager Must Be Installed and Managing Wi-Fi
+
+- **Install NetworkManager** (if not already installed):
+  ```sh
+  sudo apt-get update
+  sudo apt-get install network-manager
+  ```
+
+- **Ensure NetworkManager is running:**
+  ```sh
+  sudo systemctl enable --now NetworkManager
+  ```
+
+- **Make sure your Wi-Fi interface (e.g., `wlan0`) is managed by NetworkManager:**
+  - Check status:
+    ```sh
+    nmcli device status
+    ```
+    `wlan0` should show as `wifi` and `connected` or `disconnected` (not `unmanaged`).
+  - If it shows as `unmanaged`, edit `/etc/NetworkManager/NetworkManager.conf` and set:
+    ```
+    [ifupdown]
+    managed=true
+    ```
+    Then restart NetworkManager:
+    ```sh
+    sudo systemctl restart NetworkManager
+    ```
+
+- **Disable any other Wi-Fi managers** (like standalone `wpa_supplicant` or `dhcpcd`) for `wlan0`.
+
+### 2. D-Bus Socket Must Be Accessible to the Container
+
+- Your `docker-compose.yml` or `compose.yml` must include:
+  ```yaml
+  volumes:
+    - /var/run/dbus:/var/run/dbus
+  environment:
+    - DBUS_SYSTEM_BUS_ADDRESS=unix:path=/var/run/dbus/system_bus_socket
+  ```
+
+### 3. (Optional) Add User to netdev Group
+
+- If you run the container as a non-root user, ensure that user is in the `netdev` group on the host:
+  ```sh
+  sudo usermod -aG netdev $USER
+  ```
+
+### 4. Example: Checking Everything
+
+```sh
+nmcli device status
+# Should show wlan0 as managed
+
+sudo systemctl status NetworkManager
+# Should show active (running)
+```
+
+---
+
+**Once these requirements are met, the container will be able to control Wi-Fi using `nmcli` and switch networks as needed.**
+
 ## License
 
 This project is licensed under the MIT License.
