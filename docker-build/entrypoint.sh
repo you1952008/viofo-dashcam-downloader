@@ -178,6 +178,34 @@ while true; do
     fi
   fi
 
+  now=$(date +%s)
+  time_since_camera_check=$((now - last_camera_check))
+
+  if (( time_since_camera_check >= CAMERA_CHECK_INTERVAL )); then
+    _log INFO "Forcing check for CAMERA_SSID ($CAMERA_SSID)..."
+    last_camera_check=$now
+    if ssid_available "$CAMERA_SSID"; then
+      if [[ "$(current_ssid)" != "$CAMERA_SSID" ]]; then
+        _log INFO "Switching to CAMERA_SSID ($CAMERA_SSID)..."
+        /app/wifi_scripts/auto_wifi.sh camera
+        sleep 2
+      fi
+      if [[ "$(current_ssid)" == "$CAMERA_SSID" ]]; then
+        _log INFO "Launching video downloader..."
+        bash /app/video_downloader.sh
+        vd_exit=$?
+        wifi_connected="CAMERA"
+        if [[ $vd_exit -eq 0 ]]; then
+          _log INFO "No files left to download from camera. Switching to CAR_SSID ($CAR_SSID) or BASE_SSID ($BASE_SSID)..."
+          /app/wifi_scripts/auto_wifi.sh car || /app/wifi_scripts/auto_wifi.sh base
+          _log INFO "Staying on CAR or BASE for $IDLE_SLEEP seconds for maintenance/monitoring."
+          sleep "$IDLE_SLEEP"
+          continue
+        fi
+      fi
+    fi
+  fi
+
   _log INFO "Sleeping for $IDLE_SLEEP seconds before next check."
   sleep "$IDLE_SLEEP"
 done

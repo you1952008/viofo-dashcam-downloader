@@ -182,3 +182,10 @@ sudo systemctl status NetworkManager
 ## License
 
 This project is licensed under the MIT License.
+
+###
+
+```sh
+bump2version patch # patch, minor, major
+docker buildx bake --push
+```
