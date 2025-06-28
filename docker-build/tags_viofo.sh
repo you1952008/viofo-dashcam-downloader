@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+command -v exiftool >/dev/null 2>&1 || { echo "exiftool not found"; exit 1; }
+
 FILE="$1"
-CHECKSUM="${2:-}"
 
 echo "🔧 Tagging: $(basename "$FILE")"
 
@@ -26,7 +27,7 @@ DATETIME="${YEAR}:${MONTH}:${DAY} ${HOUR}:${MINUTE}:${SECOND}"
 # Compute SHA-256
 CHECKSUM=$(sha256sum "$FILE" | cut -d' ' -f1)
 
-# Apply metadata
+# Apply metadata (only one exiftool call needed)
 exiftool -m -overwrite_original -q -q -ExtractEmbedded \
   -DateTimeOriginal="$DATETIME" \
   -CreateDate="$DATETIME" \
@@ -40,8 +41,3 @@ TOUCH_TIMESTAMP="${YEAR}${MONTH}${DAY}${HOUR}${MINUTE}.${SECOND}"
 touch -t "$TOUCH_TIMESTAMP" "$FILE"
 
 echo "📅 File mtime set to: $DATETIME"
-
-# Add checksum as a comment and other tags as needed
-if [[ -n "$CHECKSUM" ]]; then
-  exiftool -overwrite_original -Comment="$CHECKSUM" "$FILE"
-fi

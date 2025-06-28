@@ -128,6 +128,8 @@ while true; do
       if [[ $vd_exit -eq 0 ]]; then
         _log INFO "No files left to download from camera. Switching to CAR_SSID ($CAR_SSID) or BASE_SSID ($BASE_SSID)..."
         /app/wifi_scripts/auto_wifi.sh car || /app/wifi_scripts/auto_wifi.sh base
+        # Run async_copier immediately after switching to CAR or BASE
+        bash /app/async_copier.sh
         _log INFO "Staying on CAR or BASE for $IDLE_SLEEP seconds for maintenance/monitoring."
         sleep "$IDLE_SLEEP"
         continue
@@ -170,12 +172,8 @@ while true; do
 
   # Only run async_copier if on CAR or BASE and SMB is mounted
   if ensure_smb_mount && { [[ "$wifi_connected" == "CAR" ]] || [[ "$wifi_connected" == "BASE" ]]; }; then
-    if has_files_to_copy; then
-      _log INFO "Files found in $TEMP_DIR. Launching async_copier..."
-      bash /app/async_copier.sh
-    else
-      _log INFO "No files to process in $TEMP_DIR. Waiting for new files or Wi-Fi change."
-    fi
+    # Always run async_copier, let it decide if there are files to copy
+    bash /app/async_copier.sh
   fi
 
   now=$(date +%s)

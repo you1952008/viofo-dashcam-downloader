@@ -94,10 +94,19 @@ while IFS= read -r FILE; do
   echo "$(date) │ ℹ️ New file. Downloading."
   if curl --fail --connect-timeout 15 --max-time 300 -# -o "$LOCAL_PATH" "$REMOTE_URL"; then
     echo "$(date) │ 🏷️ Tagging $LOCAL_PATH"
-    bash "$TAG_SCRIPT" "$LOCAL_PATH"
-    echo "$(date) │ ✅ Tagged."
-    echo "$FILE" >> "$INDEX_FILE"
-    consecutive_skipped=0
+    if bash "$TAG_SCRIPT" "$LOCAL_PATH"; then
+      echo "$(date) │ ✅ Tagged."
+      echo "$FILE" >> "$INDEX_FILE"
+      consecutive_skipped=0
+    else
+      echo "$(date) │ ❌ Tagging failed. Not marking as processed."
+      rm -f "$LOCAL_PATH"
+      consecutive_skipped=$((consecutive_skipped + 1))
+      if (( consecutive_skipped >= max_consecutive_skipped )); then
+        echo "$(date) │ 🚪 $max_consecutive_skipped consecutive failures. Exiting downloader."
+        exit 2
+      fi
+    fi
   else
     echo "$(date) │ ❌ Download failed. Cleaning up."
     rm -f "$LOCAL_PATH"

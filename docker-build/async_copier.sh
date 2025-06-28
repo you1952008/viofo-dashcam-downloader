@@ -20,30 +20,33 @@ main() {
   mkdir -p "$TEMP_DIR" "$DEST_DIR" "$(dirname "$LOG_FILE")"
   touch "$INDEX_FILE"
 
-  _log INFO "Checking if SMB share ($DEST_DIR) is mounted..."
-  if ! mountpoint -q "$DEST_DIR"; then
-    _log ERROR "SMB share ($DEST_DIR) is not mounted. Exiting."
-    exit 1
-  fi
+  _log INFO "DEST_DIR is set to: $DEST_DIR"
+  ls -ld "$DEST_DIR"
+  mount | grep "$DEST_DIR"
 
-  local found_files=false
+  found_files=false
   _log INFO "Scanning $TEMP_DIR for files to copy..."
+
+  FILES=("$TEMP_DIR"/*)
+  if [ ${#FILES[@]} -eq 0 ]; then
+    _log INFO "No files to process in $TEMP_DIR. Exiting async_copier."
+    exit 0
+  fi
 
   for src in "$TEMP_DIR"/!(*.txt|*.lock|*.filepart); do
     [[ -f "$src" ]] || continue
     found_files=true
-    local fname="${src##*/}"
-    local dst="$DEST_DIR/$fname"
+    fname="${src##*/}"
+    dst="$DEST_DIR/$fname"
 
     _log INFO "Processing $fname..."
 
     # Calculate checksum before tagging
-    local checksum
     checksum=$(sha256sum "$src" | cut -d' ' -f1)
     _log INFO "SHA256 for $fname: $checksum"
 
     _log INFO "Tagging $fname with metadata..."
-    if "$TAG_SCRIPT" "$src" "$checksum"; then
+    if "$TAG_SCRIPT" "$src"; then
       _log INFO "Metadata added to $fname"
     else
       _log ERROR "Failed to add metadata to $fname"
@@ -72,7 +75,7 @@ main() {
     _log ERROR "Failed to copy $INDEX_FILE to $DEST_DIR"
   fi
 
-  if ! $found_files; then
+  if [ "$found_files" = false ]; then
     _log INFO "No valid files found in $TEMP_DIR"
   fi
 
