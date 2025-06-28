@@ -6,7 +6,7 @@ target "viofo-pipeline" {
   context    = "./docker-build"
   dockerfile = "Dockerfile"
   tags       = [
-    "ryanwayne/viofo-pipeline:1.1.6",
+    "ryanwayne/viofo-pipeline:1.1.7",
     "ryanwayne/viofo-pipeline:latest"
   ]
   platforms  = [
