@@ -29,7 +29,7 @@ _log() {
 # Ensure required directories and files exist before starting main logic
 mkdir -p "$TEMP_DIR" "$DEST_DIR" "$WPA_BACKUP_DIR"
 mkdir -p "$(dirname "$LOG_FILE")"
-touch "$INDEX_FILE" "$INDEX_LOCK"
+# Do NOT touch $INDEX_FILE or $INDEX_LOCK here; let bootstrap_index.sh handle it
 bash /app/init_index.sh
 
 # Ensure WPA config file exists
@@ -90,9 +90,11 @@ else
 fi
 
 # Bootstrap the index file from existing files on the SMB share
-_log INFO "Bootstrapping index from existing files..."
-bash /app/bootstrap_index.sh
-_log INFO "Bootstrap complete."
+_log INFO "Bootstrapping index for videos..."
+bash /app/bootstrap_index.sh videos
+_log INFO "Bootstrapping index for photos..."
+bash /app/bootstrap_index.sh photos
+_log INFO "Bootstrap complete for both types."
 
 IDLE_SLEEP="${IDLE_SLEEP:-300}"  # Default to 5 minutes, override with env if needed
 

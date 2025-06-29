@@ -81,7 +81,7 @@ while IFS= read -r FILE; do
   LOCAL_PATH="${TEMP_DIR%/}/$FILE"
   REFERENCE_FILE="${DEST_DIR%/}/$FILE"
 
-  if grep -Fxq "$FILE" "$INDEX_FILE" 2>/dev/null; then
+  if grep -Fq "$FILE" "$INDEX_FILE" 2>/dev/null; then
     echo "$(date) │ ✅ Already processed. Skipping."
     consecutive_skipped=$((consecutive_skipped + 1))
     if (( consecutive_skipped >= max_consecutive_skipped )); then
@@ -92,10 +92,11 @@ while IFS= read -r FILE; do
   fi
 
   if [[ -f "$REFERENCE_FILE" ]]; then
-    embedded=$(exiftool -s3 -Comment "$REFERENCE_FILE" | grep -oE '[a-f0-9]{64}' || true)
-    if [[ -n "$embedded" ]]; then
+    comment=$(exiftool -s3 -Comment "$REFERENCE_FILE" 2>/dev/null | tr -d '\r\n')
+    checksum=$(printf "%s" "$comment" | grep -a -oE '[A-Fa-f0-9]{64}' | head -n1 || :)
+    if [[ -n "$checksum" ]]; then
       echo "$(date) │ ✅ Existing file has checksum. Skipping."
-      echo "$FILE" >> "$INDEX_FILE"
+      printf "%s %s\n" "$FILE" "$checksum" >> "$INDEX_FILE"
       consecutive_skipped=$((consecutive_skipped + 1))
       if (( consecutive_skipped >= max_consecutive_skipped )); then
         echo "$(date) │ 🚪 $max_consecutive_skipped consecutive files already processed. Exiting downloader."
@@ -111,7 +112,13 @@ while IFS= read -r FILE; do
     echo "$(date) │ 🏷️ Tagging $LOCAL_PATH"
     if bash "$TAG_SCRIPT" "$LOCAL_PATH"; then
       echo "$(date) │ ✅ Tagged."
-      echo "$FILE" >> "$INDEX_FILE"
+      # Extract checksum from tag or compute it
+      comment=$(exiftool -s3 -Comment "$LOCAL_PATH" 2>/dev/null | tr -d '\r\n')
+      checksum=$(printf "%s" "$comment" | grep -a -oE '[A-Fa-f0-9]{64}' | head -n1 || :)
+      if [[ -z "$checksum" ]]; then
+        checksum=$(sha256sum "$LOCAL_PATH" | cut -d' ' -f1)
+      fi
+      printf "%s %s\n" "$FILE" "$checksum" >> "$INDEX_FILE"
       consecutive_skipped=0
     else
       echo "$(date) │ ❌ Tagging failed. Not marking as processed."
