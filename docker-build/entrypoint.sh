@@ -74,6 +74,26 @@ has_files_to_copy() {
   (( ${#files[@]} > 0 ))
 }
 
+# Ensure THRESHOLD is set and exported (default to 10 if unset)
+: "${THRESHOLD:=10}"
+export THRESHOLD
+
+# Disk space check function (returns 0 if enough space, 1 if not)
+check_space() {
+  if [[ -z "$THRESHOLD" ]] || ! [[ "$THRESHOLD" =~ ^[0-9]+$ ]]; then
+    _log ERROR "THRESHOLD is not set or not a valid integer: '$THRESHOLD'"
+    return 1
+  fi
+  used_pct=$(df --output=pcent / | tail -1 | tr -dc '0-9')
+  free_pct=$((100 - used_pct))
+  _log INFO "Disk space check: $free_pct% free (threshold: $THRESHOLD%)"
+  if (( free_pct >= THRESHOLD )); then
+    return 0
+  else
+    return 1
+  fi
+}
+
 # Initial connection to CAR_SSID or BASE_SSID and attempt to mount SMB share
 if ssid_available "$CAR_SSID"; then
   _log INFO "Connecting to CAR_SSID ($CAR_SSID)..."
@@ -118,39 +138,53 @@ while true; do
 
   # Scan and connect in priority order: CAMERA, CAR, BASE
   if ssid_available "$CAMERA_SSID"; then
-    if [[ "$(current_ssid)" != "$CAMERA_SSID" ]]; then
-      _log INFO "CAMERA_SSID ($CAMERA_SSID) detected. Switching Wi-Fi..."
-      /app/wifi_scripts/auto_wifi.sh camera
-      sleep 2
+    if ! check_space; then
+      _log WARN "Low disk space (<${THRESHOLD}%). Skipping CAMERA_SSID switch and downloader."
+      # Do not set wifi_connected, fall through to CAR/BASE logic below
     else
-      _log INFO "Already connected to CAMERA_SSID ($CAMERA_SSID)."
-    fi
-    # Only run downloader if actually connected to CAMERA_SSID
-    if [[ "$(current_ssid)" == "$CAMERA_SSID" ]]; then
-      _log INFO "Launching downloader (videos)..."
-      export BASE_URL="http://192.168.1.254/DCIM/Movie/RO"
-      bash /app/downloader.sh videos
-      vd_exit=$?
-      _log INFO "Launching downloader (photos)..."
-      export BASE_URL="http://192.168.1.254/DCIM/Photo"
-      bash /app/downloader.sh photos
-      pd_exit=$?
-      wifi_connected="CAMERA"
-      # Always run both, then check both exit codes
-      if [[ $vd_exit -eq 0 && $pd_exit -eq 0 ]]; then
-        _log INFO "No files left to download from camera. Switching to CAR_SSID ($CAR_SSID) or BASE_SSID ($BASE_SSID)..."
-        /app/wifi_scripts/auto_wifi.sh car || /app/wifi_scripts/auto_wifi.sh base
-        # Run async_copier for both videos and photos
-        bash /app/async_copier.sh videos
-        bash /app/async_copier.sh photos
-        _log INFO "Staying on CAR or BASE for $IDLE_SLEEP seconds for maintenance/monitoring."
-        sleep "$IDLE_SLEEP"
-        continue
+      if [[ "$(current_ssid)" != "$CAMERA_SSID" ]]; then
+        _log INFO "CAMERA_SSID ($CAMERA_SSID) detected. Switching Wi-Fi..."
+        /app/wifi_scripts/auto_wifi.sh camera
+        sleep 2
+      else
+        _log INFO "Already connected to CAMERA_SSID ($CAMERA_SSID)."
       fi
-    else
-      _log ERROR "Failed to connect to CAMERA_SSID ($CAMERA_SSID). Skipping downloader."
+      # Only run downloader if actually connected to CAMERA_SSID
+      if [[ "$(current_ssid)" == "$CAMERA_SSID" ]]; then
+        _log INFO "Launching downloader (videos)..."
+        export BASE_URL="http://192.168.1.254/DCIM/Movie/RO"
+        bash /app/downloader.sh videos
+        vd_exit=$?
+        _log INFO "Launching downloader (photos)..."
+        export BASE_URL="http://192.168.1.254/DCIM/Photo"
+        bash /app/downloader.sh photos
+        pd_exit=$?
+        wifi_connected="CAMERA"
+        # Always run both, then check both exit codes
+        if [[ $vd_exit -eq 0 && $pd_exit -eq 0 ]]; then
+          _log INFO "No files left to download from camera. Switching to CAR_SSID ($CAR_SSID) or BASE_SSID ($BASE_SSID)..."
+          # Try to switch to CAR, if that fails, try BASE
+          if /app/wifi_scripts/auto_wifi.sh car; then
+            _log INFO "Switched to CAR_SSID ($CAR_SSID)."
+          elif /app/wifi_scripts/auto_wifi.sh base; then
+            _log INFO "Switched to BASE_SSID ($BASE_SSID)."
+          else
+            _log ERROR "Failed to switch to either CAR or BASE SSID."
+          fi
+          # Run async_copier for both videos and photos
+          bash /app/async_copier.sh videos
+          bash /app/async_copier.sh photos
+          _log INFO "Staying on CAR or BASE for $IDLE_SLEEP seconds for maintenance/monitoring."
+          sleep "$IDLE_SLEEP"
+          continue
+        fi
+      else
+        _log ERROR "Failed to connect to CAMERA_SSID ($CAMERA_SSID). Skipping downloader."
+      fi
     fi
-  elif ssid_available "$CAR_SSID"; then
+    # After CAMERA logic (including skip), fall through to CAR/BASE logic
+  fi
+  if ssid_available "$CAR_SSID"; then
     if [[ "$(current_ssid)" != "$CAR_SSID" ]]; then
       _log INFO "CAR_SSID ($CAR_SSID) detected. Switching Wi-Fi..."
       /app/wifi_scripts/auto_wifi.sh car
@@ -197,27 +231,39 @@ while true; do
     _log INFO "Forcing check for CAMERA_SSID ($CAMERA_SSID)..."
     last_camera_check=$now
     if ssid_available "$CAMERA_SSID"; then
-      if [[ "$(current_ssid)" != "$CAMERA_SSID" ]]; then
-        _log INFO "Switching to CAMERA_SSID ($CAMERA_SSID)..."
-        /app/wifi_scripts/auto_wifi.sh camera
-        sleep 2
-      fi
-      if [[ "$(current_ssid)" == "$CAMERA_SSID" ]]; then
-        _log INFO "Launching downloader (videos)..."
-        export BASE_URL="http://192.168.1.254/DCIM/Movie/RO"
-        bash /app/downloader.sh videos
-        vd_exit=$?
-        _log INFO "Launching downloader (photos)..."
-        export BASE_URL="http://192.168.1.254/DCIM/Photo"
-        bash /app/downloader.sh photos
-        pd_exit=$?
-        wifi_connected="CAMERA"
-        if [[ $vd_exit -eq 0 && $pd_exit -eq 0 ]]; then
-          _log INFO "No files left to download from camera. Switching to CAR_SSID ($CAR_SSID) or BASE_SSID ($BASE_SSID)..."
-          /app/wifi_scripts/auto_wifi.sh car || /app/wifi_scripts/auto_wifi.sh base
-          _log INFO "Staying on CAR or BASE for $IDLE_SLEEP seconds for maintenance/monitoring."
-          sleep "$IDLE_SLEEP"
-          continue
+      if ! check_space; then
+        _log WARN "Low disk space (<${THRESHOLD}%). Skipping CAMERA_SSID switch and downloader."
+        # Do not sleep/continue here; allow rest of loop to run (async_copier for CAR/BASE)
+      else
+        if [[ "$(current_ssid)" != "$CAMERA_SSID" ]]; then
+          _log INFO "Switching to CAMERA_SSID ($CAMERA_SSID)..."
+          /app/wifi_scripts/auto_wifi.sh camera
+          sleep 2
+        fi
+        if [[ "$(current_ssid)" == "$CAMERA_SSID" ]]; then
+          _log INFO "Launching downloader (videos)..."
+          export BASE_URL="http://192.168.1.254/DCIM/Movie/RO"
+          bash /app/downloader.sh videos
+          vd_exit=$?
+          _log INFO "Launching downloader (photos)..."
+          export BASE_URL="http://192.168.1.254/DCIM/Photo"
+          bash /app/downloader.sh photos
+          pd_exit=$?
+          wifi_connected="CAMERA"
+          if [[ $vd_exit -eq 0 && $pd_exit -eq 0 ]]; then
+            _log INFO "No files left to download from camera. Switching to CAR_SSID ($CAR_SSID) or BASE_SSID ($BASE_SSID)..."
+            # Try to switch to CAR, if that fails, try BASE
+            if /app/wifi_scripts/auto_wifi.sh car; then
+              _log INFO "Switched to CAR_SSID ($CAR_SSID)."
+            elif /app/wifi_scripts/auto_wifi.sh base; then
+              _log INFO "Switched to BASE_SSID ($BASE_SSID)."
+            else
+              _log ERROR "Failed to switch to either CAR or BASE SSID."
+            fi
+            _log INFO "Staying on CAR or BASE for $IDLE_SLEEP seconds for maintenance/monitoring."
+            sleep "$IDLE_SLEEP"
+            continue
+          fi
         fi
       fi
     fi

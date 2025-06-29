@@ -67,7 +67,7 @@ if [[ ! -s "$TMP_LIST" ]]; then
 fi
 
 consecutive_skipped=0
-max_consecutive_skipped=10
+max_consecutive_skipped=3
 
 while IFS= read -r FILE; do
   echo "$(date) │ → Next: $FILE"
@@ -91,6 +91,7 @@ while IFS= read -r FILE; do
     continue
   fi
 
+  checksum=""
   if [[ -f "$REFERENCE_FILE" ]]; then
     comment=$(exiftool -s3 -Comment "$REFERENCE_FILE" 2>/dev/null | tr -d '\r\n')
     checksum=$(printf "%s" "$comment" | grep -a -oE '[A-Fa-f0-9]{64}' | head -n1 || :)
@@ -112,11 +113,12 @@ while IFS= read -r FILE; do
     echo "$(date) │ 🏷️ Tagging $LOCAL_PATH"
     if bash "$TAG_SCRIPT" "$LOCAL_PATH"; then
       echo "$(date) │ ✅ Tagged."
-      # Extract checksum from tag or compute it
+      # Extract checksum from tag or compute it ONCE
       comment=$(exiftool -s3 -Comment "$LOCAL_PATH" 2>/dev/null | tr -d '\r\n')
       checksum=$(printf "%s" "$comment" | grep -a -oE '[A-Fa-f0-9]{64}' | head -n1 || :)
       if [[ -z "$checksum" ]]; then
         checksum=$(sha256sum "$LOCAL_PATH" | cut -d' ' -f1)
+        # Optionally, you could re-tag here with the checksum if needed
       fi
       printf "%s %s\n" "$FILE" "$checksum" >> "$INDEX_FILE"
       consecutive_skipped=0
@@ -138,7 +140,6 @@ while IFS= read -r FILE; do
       exit 2
     fi
   fi
-
 done < "$TMP_LIST"
 
 echo "$(date) │ ✔️ All done."
