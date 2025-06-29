@@ -19,7 +19,7 @@ RUN apt-get update \
 WORKDIR /app
 
 # Copy scripts
-COPY entrypoint.sh video_downloader.sh async_copier.sh tags_viofo.sh bootstrap_index.sh init_index.sh ./
+COPY entrypoint.sh downloader.sh async_copier.sh tags_viofo.sh bootstrap_index.sh init_index.sh ./
 COPY wifi_scripts/ ./wifi_scripts/
 
 ENTRYPOINT ["bash", "./entrypoint.sh"]

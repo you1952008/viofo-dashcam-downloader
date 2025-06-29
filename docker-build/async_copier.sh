@@ -7,6 +7,13 @@ source /app/wifi_scripts/config.sh
 
 TAG_SCRIPT="/app/tags_viofo.sh"
 
+TYPE="${1:-videos}"  # Default to 'videos' if not specified
+
+# Append subdirectory based on type
+TEMP_DIR="${TEMP_DIR%/}/$TYPE"
+DEST_DIR="${DEST_DIR%/}/$TYPE"
+INDEX_FILE="${TEMP_DIR}/processed_files.txt"
+
 _log() {
   local level="${1:-INFO}"
   shift
@@ -16,13 +23,12 @@ _log() {
 }
 
 main() {
-  _log INFO "=== async_copier started ==="
+  _log INFO "=== async_copier started for $TYPE ==="
   mkdir -p "$TEMP_DIR" "$DEST_DIR" "$(dirname "$LOG_FILE")"
   touch "$INDEX_FILE"
 
   _log INFO "DEST_DIR is set to: $DEST_DIR"
   ls -ld "$DEST_DIR"
-  mount | grep "$DEST_DIR"
 
   found_files=false
   _log INFO "Scanning $TEMP_DIR for files to copy..."
@@ -79,7 +85,7 @@ main() {
     _log INFO "No valid files found in $TEMP_DIR"
   fi
 
-  _log INFO "=== async_copier finished ==="
+  _log INFO "=== async_copier finished for $TYPE ==="
 }
 
 main "$@"

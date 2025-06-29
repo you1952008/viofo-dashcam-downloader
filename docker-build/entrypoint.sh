@@ -8,10 +8,14 @@ source /app/wifi_scripts/config.sh
 
 # Hardcoded paths
 TEMP_DIR="/app/downloads"
-DEST_DIR="/app/dashcam/videos"
+DEST_DIR="/app/dashcam"
 LOG_FILE="/app/logs/viofo_copy.log"
 INDEX_FILE="/app/downloads/processed_files.txt"
 INDEX_LOCK="/app/downloads/processed_files.txt.lock"
+TAG_SCRIPT="/app/tags_viofo.sh"
+
+# Export base paths for use in child scripts
+export TEMP_DIR DEST_DIR TAG_SCRIPT
 
 # Logging function for consistent log output
 _log() {
@@ -119,23 +123,30 @@ while true; do
     else
       _log INFO "Already connected to CAMERA_SSID ($CAMERA_SSID)."
     fi
-    # Only run video_downloader if actually connected to CAMERA_SSID
+    # Only run downloader if actually connected to CAMERA_SSID
     if [[ "$(current_ssid)" == "$CAMERA_SSID" ]]; then
-      _log INFO "Launching video downloader..."
-      bash /app/video_downloader.sh
+      _log INFO "Launching downloader (videos)..."
+      export BASE_URL="http://192.168.1.254/DCIM/Movie/RO"
+      bash /app/downloader.sh videos
       vd_exit=$?
+      _log INFO "Launching downloader (photos)..."
+      export BASE_URL="http://192.168.1.254/DCIM/Photo"
+      bash /app/downloader.sh photos
+      pd_exit=$?
       wifi_connected="CAMERA"
-      if [[ $vd_exit -eq 0 ]]; then
+      # Always run both, then check both exit codes
+      if [[ $vd_exit -eq 0 && $pd_exit -eq 0 ]]; then
         _log INFO "No files left to download from camera. Switching to CAR_SSID ($CAR_SSID) or BASE_SSID ($BASE_SSID)..."
         /app/wifi_scripts/auto_wifi.sh car || /app/wifi_scripts/auto_wifi.sh base
-        # Run async_copier immediately after switching to CAR or BASE
-        bash /app/async_copier.sh
+        # Run async_copier for both videos and photos
+        bash /app/async_copier.sh videos
+        bash /app/async_copier.sh photos
         _log INFO "Staying on CAR or BASE for $IDLE_SLEEP seconds for maintenance/monitoring."
         sleep "$IDLE_SLEEP"
         continue
       fi
     else
-      _log ERROR "Failed to connect to CAMERA_SSID ($CAMERA_SSID). Skipping video downloader."
+      _log ERROR "Failed to connect to CAMERA_SSID ($CAMERA_SSID). Skipping downloader."
     fi
   elif ssid_available "$CAR_SSID"; then
     if [[ "$(current_ssid)" != "$CAR_SSID" ]]; then
@@ -172,8 +183,9 @@ while true; do
 
   # Only run async_copier if on CAR or BASE and SMB is mounted
   if ensure_smb_mount && { [[ "$wifi_connected" == "CAR" ]] || [[ "$wifi_connected" == "BASE" ]]; }; then
-    # Always run async_copier, let it decide if there are files to copy
-    bash /app/async_copier.sh
+    # Always run async_copier for both videos and photos
+    bash /app/async_copier.sh videos
+    bash /app/async_copier.sh photos
   fi
 
   now=$(date +%s)
@@ -189,11 +201,16 @@ while true; do
         sleep 2
       fi
       if [[ "$(current_ssid)" == "$CAMERA_SSID" ]]; then
-        _log INFO "Launching video downloader..."
-        bash /app/video_downloader.sh
+        _log INFO "Launching downloader (videos)..."
+        export BASE_URL="http://192.168.1.254/DCIM/Movie/RO"
+        bash /app/downloader.sh videos
         vd_exit=$?
+        _log INFO "Launching downloader (photos)..."
+        export BASE_URL="http://192.168.1.254/DCIM/Photo"
+        bash /app/downloader.sh photos
+        pd_exit=$?
         wifi_connected="CAMERA"
-        if [[ $vd_exit -eq 0 ]]; then
+        if [[ $vd_exit -eq 0 && $pd_exit -eq 0 ]]; then
           _log INFO "No files left to download from camera. Switching to CAR_SSID ($CAR_SSID) or BASE_SSID ($BASE_SSID)..."
           /app/wifi_scripts/auto_wifi.sh car || /app/wifi_scripts/auto_wifi.sh base
           _log INFO "Staying on CAR or BASE for $IDLE_SLEEP seconds for maintenance/monitoring."

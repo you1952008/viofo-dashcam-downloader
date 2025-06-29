@@ -4,11 +4,11 @@ shopt -s nullglob
 PS4='+ [${BASH_SOURCE}:${LINENO}] '
 
 : "${THRESHOLD:?Need THRESHOLD in env}"
-: "${BASE_URL:=http://192.168.1.254/DCIM/Movie/RO}"
-: "${TEMP_DIR:=/app/downloads}"
-: "${DEST_DIR:=/app/dashcam}"
+: "${BASE_URL:=http://192.168.1.254/DCIM/Photo}"
+: "${TEMP_DIR:=/app/downloads/photos}"
+: "${DEST_DIR:=/app/dashcam/photos}"
 : "${TAG_SCRIPT:=/app/tags_viofo.sh}"
-: "${INDEX_FILE:=/app/downloads/processed_files.txt}"
+: "${INDEX_FILE:=/app/downloads/photos/processed_files.txt}"
 
 check_space() {
   local used_pct free_pct
@@ -36,7 +36,7 @@ trap 'rm -f "$TMP_LIST"' EXIT
 echo "$(date) │ Curling file list from $BASE_URL"
 {
   curl --fail --connect-timeout 5 --max-time 15 -s "${BASE_URL%/}/" \
-    | grep -oiE 'href="[^"]+\.(MP4|MOV|TS)"' \
+    | grep -oiE 'href="[^"]+\.JPG"' \
     | sed -E 's/^href="(.+)"/\1/' \
     | sed 's|^.*/||' \
     | sort -ru \
@@ -120,4 +120,4 @@ while IFS= read -r FILE; do
 done < "$TMP_LIST"
 
 echo "$(date) │ ✔️ All done."
-exit 0
+exit
